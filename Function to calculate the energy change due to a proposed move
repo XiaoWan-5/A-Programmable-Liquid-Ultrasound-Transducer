@@ -1,0 +1,111 @@
+%% Function to calculate the energy change due to a proposed move
+function DeltaE = calculateEnergyChange(i, newPosition, positions, m_old, m_new, m, d, mu0, epsilon, Bext, L)
+
+    % L for possible PBC configuration
+    N = size(positions,1);
+    DeltaE = 0;
+    ri_old = positions(i,:);
+    ri_new = newPosition;
+
+    for j = 1:N
+        if j == i
+            continue
+        end
+        rj = positions(j,:);
+        mj = m(j,:);
+        dij = (d(i) + d(j)) / 2;
+        sigma = dij;
+        rc = 2^(1/6) * sigma;   % WCA cutoff
+    
+        % OLD configuration
+        rij_old = ri_old - rj;
+        r_old = norm(rij_old);
+    
+        % hard core (for safety)
+        if r_old <= dij
+            DeltaE = inf;
+            return
+        end
+    
+        % --- WCA (old) ---
+        if r_old < rc
+            U_LJ_old = 4*epsilon*((sigma/r_old)^12 - (sigma/r_old)^6);
+            U_WCA_old = U_LJ_old + epsilon;
+        else
+            U_WCA_old = 0;
+        end
+    
+        % dipole-dipole (old)
+        rhat_old = rij_old / r_old;
+        U_dd_old = mu0/(4*pi*r_old^3) * ( dot(m_old, mj) - 3*dot(m_old,rhat_old)*dot(mj,rhat_old) );
+    
+        % NEW configuration
+        rij_new = ri_new - rj;
+        r_new = norm(rij_new);
+    
+        if r_new <= dij
+            DeltaE = inf;
+            return
+        end
+    
+        % --- WCA (new) ---
+        if r_new < rc
+            U_LJ_new = 4*epsilon*((sigma/r_new)^12 - (sigma/r_new)^6);
+            U_WCA_new = U_LJ_new + epsilon;
+        else
+            U_WCA_new = 0;
+        end
+    
+        % dipole-dipole (new)
+        rhat_new = rij_new / r_new;
+        U_dd_new = mu0/(4*pi*r_new^3) * ...
+            ( dot(m_new, mj) - 3*dot(m_new,rhat_new)*dot(mj,rhat_new) );
+    
+        % accumulate
+        DeltaE = DeltaE + (U_WCA_new + U_dd_new) - (U_WCA_old + U_dd_old);
+    end
+
+    % Zeeman energy (once)
+    DeltaE = DeltaE + ( -dot(m_new, Bext) - (-dot(m_old, Bext)) );
+end
+
+
+% Avoid overlap when initializaiton
+function positions = overlap_initial(positions,alpha,maxTrials,N,L,d)
+
+    for i = 1:N
+        placed = false;
+        trial = 0;  
+        while ~placed
+            trial = trial + 1;
+            if trial > maxTrials
+                error('Initialization failed: box too small or density too high.');
+            end
+    
+            candidate = rand(1,3) * L;
+    
+            if i == 1
+                placed = true;
+            else
+                rij = positions(1:i-1,:) - candidate;
+                dist = vecnorm(rij,2,2);
+    
+                if all(dist > alpha * d(1))
+                    placed = true;
+                end
+            end
+        end
+        positions(i,:) = candidate;
+    end
+end
+
+function m_new = propose_rotate(m_old, maxAngle)
+    axis = randn(1,3);
+    axis = axis / norm(axis);
+
+    theta = (2*rand - 1) * maxAngle;
+
+    m_new = m_old*cos(theta) ...
+          + cross(axis, m_old)*sin(theta) ...
+          + axis*dot(axis, m_old)*(1 - cos(theta));
+end
