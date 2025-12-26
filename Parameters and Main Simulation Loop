@@ -13,7 +13,7 @@ p_rotate    = 0.5;              % 50% rotation
 
 % Particle properties
 norm_d = 2e-8;                  % Normalized diameter of each particle (20 nm)
-L = 20*norm_d;                  % Side length of the cubic box (m)
+L = 20*norm_d;                  % Side length of the cubic box, 20 times as a example
 d = norm_d * ones(N,1);         % Diameters
 r = d(1)/2;                     % Radius of the particle (m)
 
